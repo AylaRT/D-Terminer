@@ -18,6 +18,56 @@ from dterminer_reusables import check_language, check_corpus_dp, check_existing_
     listdir_nohidden, get_sublist_indices
 
 
+def check_tmx_language_codes(tmx_fp):
+    """
+    Based on the language codes found in the tmx file,
+    create a dictionary with the general language codes as keys ("en", "fr", "nl, "de")
+    and the matching language codes in the tmx as values.
+    return that dictionary.
+
+    :param tmx_fp: path to .tmx file
+    :return: language_code_dict = {"en": "equivalent code in tmx", "fr": "...", "nl": "...", "de": "..."}
+    """
+    language_code_dict = {"en": "", "fr": "", "nl": "", "de": ""}
+    with open(tmx_fp, "rt", encoding="utf-8") as tmx_f:
+        lines = tmx_f.read().splitlines()
+        for line in lines:
+            xml_lang_index = line.find("xml:lang=")
+            if xml_lang_index > -1:
+                language_code_start_index = xml_lang_index + 10
+                closing_bracket_index = line.find(">")
+                if not closing_bracket_index > language_code_start_index:
+                    print("ERROR check_tmx_language_codes: checkpoint 1 end index of language code field does not work")
+                else:
+                    language_code_end_index = closing_bracket_index - 1
+                language_code = line[language_code_start_index:language_code_end_index]
+                check = False
+                for language_code_general, language_code_tmx in language_code_dict.items():
+                    if language_code.lower().startswith(language_code_general.lower()):
+                        check = True
+                        if not language_code_tmx:
+                            language_code_dict[language_code_general] = language_code
+                        elif language_code_tmx != language_code:
+                            print(f"ERROR check_tmx_language_codes: checkpoint 2 different language codes for same"
+                                  f"language?\n"
+                                  f"language code found: {language_code}\n"
+                                  f"language code tmx dict: {language_code_tmx}\n"
+                                  f"{language_code_dict}")
+                if not check:
+                    full_languages = {"dutch": "nl", "french": "fr", "english": "en", "german": "de"}
+                    for full_language, language_code_general in full_languages.items():
+                        if full_language in language_code.lower():
+                            check = True
+                            if not language_code_general:
+                                language_code_dict[language_code_general] = language_code
+                            elif language_code_tmx != language_code:
+                                print(f"ERROR check_tmx_language_codes: checkpoint 3 different language codes for same"
+                                      f"language? {language_code}\n{language_code_dict}")
+                if not check:
+                    print(f"ERROR check_tmx_language_codes: checkpoint 4 unknown language code: {language_code}")
+    return language_code_dict
+
+
 def tmx2txt(tmx_fp, language_dp_dict, verbose=False):
     """
     Based on a .tmx file, extract .txt files for each of the given languages
@@ -68,6 +118,9 @@ def tmx2txt(tmx_fp, language_dp_dict, verbose=False):
             elif proceed == "continue":
                 return
 
+    # check language codes
+    language_code_dict = check_tmx_language_codes(tmx_fp, )
+
     # parse tmx
     nsmap = {"xml": "http://www.w3.org/XML/1998/namespace"}
     try:
@@ -75,7 +128,7 @@ def tmx2txt(tmx_fp, language_dp_dict, verbose=False):
         tus = tree.findall("//tu")
         for tu_id, tu in enumerate(tus, 1):
             for language in language_dp_dict.keys():
-                segment = tu.find(f"./tuv[@xml:lang='{language.upper()}']/seg", namespaces=nsmap).text
+                segment = tu.find(f"./tuv[@xml:lang='{language_code_dict[language]}']/seg", namespaces=nsmap).text
                 if segment:
                     fps_texts_dict[languages_fps_dict[language.lower()]] += segment + "\n"
                 else:
