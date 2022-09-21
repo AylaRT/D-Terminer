@@ -17,7 +17,8 @@ from flair.data import Sentence
 from flair.models import SequenceTagger
 from prepro_linguistic import tokenise_text
 from prepro_normalise import normalise_text_standard
-from dterminer_reusables import check_language, check_corpus_dp, check_existing_data_seq_no_features, listdir_nohidden
+from dterminer_reusables import check_language, check_corpus_dp, check_existing_data_seq_no_features, \
+    listdir_nohidden, check_encoding
 
 
 def prep_corpus_sbm(dp, language, tok_nesting="eos"):
@@ -72,9 +73,12 @@ def prep_corpus_sbm(dp, language, tok_nesting="eos"):
         fn_data = "seqData_" + fn
         data_fp = data_dp + fn_data
 
+        # 2.1bis check encoding
+        corpus_encoding = check_encoding(corpus_fp)
+
         # 2.2 normalise
         # result = single string of normalised text (can be multiple lines)
-        with open(corpus_fp, "rt", encoding="utf-8") as corpus_f:
+        with open(corpus_fp, "rt", encoding=corpus_encoding) as corpus_f:
             original_text = corpus_f.read()
         normalised_text = normalise_text_standard(original_text)
 
@@ -513,6 +517,6 @@ def extract_terms_sbm(dp, domains, iob_or_io, optimiser="AdamW", nr_hidden=1, si
     return output_dp
 
 
-prep_corpus_sbm("unseen_corpora/mono_test/", "en", tok_nesting="eos")
-extract_terms_sbm("unseen_corpora/mono_test/", ["corp", "equi", "htfl", "wind"], "iob", optimiser="AdamW",
-                  nr_hidden=1, size=512, incl_incorr_tok=True, specific=1, common=1, ood=1, ne=1, partial=1)
+# prep_corpus_sbm("unseen_corpora/mono_test/", "en", tok_nesting="eos")
+# extract_terms_sbm("unseen_corpora/mono_test/", ["corp", "equi", "htfl", "wind"], "iob", optimiser="AdamW",
+#                   nr_hidden=1, size=512, incl_incorr_tok=True, specific=1, common=1, ood=1, ne=1, partial=1)

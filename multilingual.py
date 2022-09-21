@@ -15,26 +15,68 @@ from operator import itemgetter
 from lxml.etree import ElementTree
 from seq_bert_multi import prep_corpus_sbm, extract_terms_sbm
 from dterminer_reusables import check_language, check_corpus_dp, check_existing_data_seq_no_features, \
-    listdir_nohidden, get_sublist_indices
+    listdir_nohidden, get_sublist_indices, check_encoding
 
 
-def check_tmx_language_codes(tmx_fp):
+def remove_newlines_before_seg(tmx_fp, encoding):
+    """
+    Remove all newline characters before <seg> elements for easier processing
+    rewrite file if necessary to same path with "_edited" appended
+
+    :param tmx_fp: path to .tmx file
+    :param encoding: encoding of file as found by check_encoding
+    :return: correct fp: original one if nothing changed, edited one if it did
+    """
+    # Read in the file
+    with open(tmx_fp, "rt", encoding=encoding) as tmx_f:
+        content = tmx_f.read()
+
+    # Replace the target string
+    content_without_newline = content.replace(">\n<seg>", "><seg>")
+    if content != content_without_newline:
+        # Write the file out again
+        tmx_fp_edited = tmx_fp + "_edited"
+        with open(tmx_fp_edited, "wt", encoding=encoding) as tmx_f:
+            tmx_f.write(content_without_newline)
+            print(f"\t\t> removed unnecessary newlines and wrote to {tmx_fp_edited};\n"
+                  f"process will be continued based on this file")
+            return tmx_fp_edited
+    else:
+        return tmx_fp
+
+
+def check_tmx_language_codes(tmx_fp, encoding):
     """
     Based on the language codes found in the tmx file,
     create a dictionary with the general language codes as keys ("en", "fr", "nl, "de")
     and the matching language codes in the tmx as values.
     return that dictionary.
+    Also check the naming of the tuv segments as either "tuv lang" or "tuv xml:lang"
+    and return tuv_name as either one.
 
     :param tmx_fp: path to .tmx file
-    :return: language_code_dict = {"en": "equivalent code in tmx", "fr": "...", "nl": "...", "de": "..."}
+    :param encoding: encoding of file as found by check_encoding
+    :return: language_code_dict = {"en": "equivalent code in tmx", "fr": "...", "nl": "...", "de": "..."},
+             tuv_name ('tuv lang' or 'tuv xml:lang')
     """
     language_code_dict = {"en": "", "fr": "", "nl": "", "de": ""}
-    with open(tmx_fp, "rt", encoding="utf-8") as tmx_f:
+    ignored_languages = []
+    tuv_name = ""
+    with open(tmx_fp, "rt", encoding=encoding) as tmx_f:
         lines = tmx_f.read().splitlines()
         for line in lines:
-            xml_lang_index = line.find("xml:lang=")
-            if xml_lang_index > -1:
-                language_code_start_index = xml_lang_index + 10
+            xml_lang_index = line.find("lang=")
+            if xml_lang_index > -1 and "tuv" in line:
+                # check tuv_name
+                if not tuv_name:
+                    if "tuv lang" in line:
+                        tuv_name = "tuv lang"
+                    elif "tuv xml:lang" in line:
+                        tuv_name = "tuv xml:lang"
+                    else:
+                        raise ValueError(
+                            f"tuv name not 'tuv lang' or 'tuv xml:lang': how are segments with language codes named?")
+                language_code_start_index = xml_lang_index + 6
                 closing_bracket_index = line.find(">")
                 if not closing_bracket_index > language_code_start_index:
                     print("ERROR check_tmx_language_codes: checkpoint 1 end index of language code field does not work")
@@ -64,8 +106,12 @@ def check_tmx_language_codes(tmx_fp):
                                 print(f"ERROR check_tmx_language_codes: checkpoint 3 different language codes for same"
                                       f"language? {language_code}\n{language_code_dict}")
                 if not check:
-                    print(f"ERROR check_tmx_language_codes: checkpoint 4 unknown language code: {language_code}")
-    return language_code_dict
+                    if language_code not in ignored_languages:
+                        ignored_languages.append(language_code)
+    print(f"\t\t> detected language codes: {language_code_dict}\n")
+    print(f"\t\t> ignoring language codes: {ignored_languages}\n")
+    print(f"\t\t> tuv name: {tuv_name}\n")
+    return language_code_dict, tuv_name
 
 
 def tmx2txt(tmx_fp, language_dp_dict, verbose=False):
@@ -118,24 +164,47 @@ def tmx2txt(tmx_fp, language_dp_dict, verbose=False):
             elif proceed == "continue":
                 return
 
+    # check encoding
+    encoding = check_encoding(tmx_fp)
+
+    # remove newlines if necessary
+    tmx_fp = remove_newlines_before_seg(tmx_fp, encoding)
+
     # check language codes
-    language_code_dict = check_tmx_language_codes(tmx_fp, )
+    language_code_dict, tuv_name = check_tmx_language_codes(tmx_fp, encoding)
 
     # parse tmx
-    nsmap = {"xml": "http://www.w3.org/XML/1998/namespace"}
+    if tuv_name == "tuv xml:lang":
+        nsmap = {"xml": "http://www.w3.org/XML/1998/namespace"}
+    else:
+        nsmap = {"tmx": "http://www.lisa.org/tmx14"}
     try:
         tree: ElementTree = etree.parse(tmx_fp)
         tus = tree.findall("//tu")
         for tu_id, tu in enumerate(tus, 1):
             for language in language_dp_dict.keys():
-                segment = tu.find(f"./tuv[@xml:lang='{language_code_dict[language]}']/seg", namespaces=nsmap).text
+                segment = ""
+                if tuv_name == "tuv xml:lang" and \
+                        tu.find(f"./tuv[@xml:lang='{language_code_dict[language]}']/seg", namespaces=nsmap) is not None:
+                    segment = tu.find(f"./tuv[@xml:lang='{language_code_dict[language]}']/seg", namespaces=nsmap).text
+                elif tuv_name == "tuv lang" and \
+                        tu.find(f"./tuv[@lang='{language_code_dict[language]}']/seg", namespaces=nsmap) is not None:
+                    segment = tu.find(f"./tuv[@lang='{language_code_dict[language]}']/seg", namespaces=nsmap).text
                 if segment:
                     fps_texts_dict[languages_fps_dict[language.lower()]] += segment + "\n"
                 else:
                     segment_exists_in_other_language = False
                     for l_inner in language_dp_dict.keys():
-                        if tu.find(f"./tuv[@xml:lang='{l_inner.upper()}']/seg", namespaces=nsmap).text:
-                            segment_exists_in_other_language = True
+                        if tuv_name == "tuv xml:lang" and \
+                                tu.find(f"./tuv[@xml:lang='{language_code_dict[l_inner]}']/seg", namespaces=nsmap) \
+                                is not None:
+                            if tu.find(f"./tuv[@xml:lang='{language_code_dict[l_inner]}']/seg", namespaces=nsmap).text:
+                                segment_exists_in_other_language = True
+                        elif tuv_name == "tuv lang" and \
+                                tu.find(f"./tuv[@lang='{language_code_dict[l_inner]}']/seg", namespaces=nsmap) \
+                                is not None:
+                            if tu.find(f"./tuv[@lang='{language_code_dict[l_inner]}']/seg", namespaces=nsmap).text:
+                                segment_exists_in_other_language = True
                     if segment_exists_in_other_language:
                         fps_texts_dict[languages_fps_dict[language.lower()]] += "None" + "\n"
                     else:
@@ -176,7 +245,7 @@ def prep_multilingual_ate_check(dp, languages, monolingual_ate):
             os.mkdir(l_dp)
         if not os.path.exists(l_dp_corpus):  # create language-dependent subdir corpus if it does not exist yet
             os.mkdir(l_dp_corpus)
-        if monolingual_ate == "sbm":  # check for pre-existing data depending on chosen type of monol. ATE
+        if monolingual_ate == "sbm":  # check for pre-existing data depending on chosen type of monolingual ATE
             proceed = check_existing_data_seq_no_features(l_dp)  # create data dp and check for pre-existing data
             if proceed == "stop":
                 raise FileExistsError(f"ERROR prep_multilingual_ate: corpus has already been prepared/preprocessed;\n"

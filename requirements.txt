@@ -22,7 +22,7 @@ konoha==4.6.5
 langdetect==1.0.9
 lxml==4.8.0
 matplotlib==3.5.1
-mecab-python==0.0.0
+mecab-python==1.0.0
 more-itertools==8.8.0
 mpld3==0.3
 numpy==1.22.2

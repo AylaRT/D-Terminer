@@ -1,6 +1,7 @@
 """Various functions that may be reusable throughout the D-Terminer project for different pipelines"""
 
 import os
+import cchardet as chardet
 
 
 def listdir_nohidden(path, extension=""):
@@ -149,3 +150,18 @@ def get_sublist_indices(sublist, main_list):
                 overlapping_indices.append(i)
             results.append(overlapping_indices)
     return results
+
+
+def check_encoding(fp):
+    """
+    Use cchardet to check encoding of file end return the correct encoding
+
+    :param fp: path to file
+    :return: encoding (e.g., "UTF-8" or "UTF-16")
+    """
+    with open(fp, "rb") as f:
+        content = f.read()
+        result = chardet.detect(content)
+        encoding = result["encoding"]
+    return encoding
+
