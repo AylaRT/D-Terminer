@@ -752,3 +752,7 @@ def multilingual_ate_sbm_complete(dp, out_fn, l1, l2, domains, iob_or_io, optimi
                                                                specific=specific, common=common, ood=ood, ne=ne,
                                                                partial=partial)
     multilingual_ate_sbm(dp, l1, l2, output_dp_l1, output_dp_l2, out_fn)
+
+
+# multilingual_ate_sbm_complete("unseen_corpora/batteries/", "test_batteries", "en", "fr",
+#                               ["corp", "equi", "htfl", "wind"], "io")

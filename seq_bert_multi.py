@@ -412,6 +412,7 @@ def extract_terms_sbm(dp, domains, iob_or_io, optimiser="AdamW", nr_hidden=1, si
             tokenised_texts += " ".join(sentence_list) + "*_*"
 
             # use pretrained model to tag sentence
+            print(sentence)
             model.predict(sentence)
             sentence_pred_string = sentence.to_tagged_string()              # "token1 token2 <I> token3 token4 <B>"
             split_sentence_pred_string = sentence_pred_string.split()   # [token1, token2, <I>, token3, token4, <B>]
@@ -517,6 +518,6 @@ def extract_terms_sbm(dp, domains, iob_or_io, optimiser="AdamW", nr_hidden=1, si
     return output_dp
 
 
-# prep_corpus_sbm("unseen_corpora/mono_test/", "en", tok_nesting="eos")
-# extract_terms_sbm("unseen_corpora/mono_test/", ["corp", "equi", "htfl", "wind"], "iob", optimiser="AdamW",
+# prep_corpus_sbm("unseen_corpora/taalkunde/", "nl", tok_nesting="eos")
+# extract_terms_sbm("unseen_corpora/taalkunde/", ["corp", "equi", "htfl", "wind"], "iob", optimiser="AdamW",
 #                   nr_hidden=1, size=512, incl_incorr_tok=True, specific=1, common=1, ood=1, ne=1, partial=1)
